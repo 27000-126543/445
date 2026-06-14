@@ -91,12 +91,15 @@ export interface EventItem {
   peakTime?: string;
   endTime?: string;
   heatIndex: number;
+  heat?: number;
   heatTrend: HeatTrend;
   emotionScore: number;
   negativeRatio: number;
   spreadSpeed: number;
   sourceCount: number;
   opinionCount: number;
+  commentCount?: number;
+  repostCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -183,7 +186,10 @@ export interface Plan {
   year: number;
   type: string;
   description: string;
-  fileUrl: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  nodesCount?: number;
   status: 'draft' | 'active' | 'archived';
   createdAt: string;
   createdBy: string;
@@ -201,9 +207,13 @@ export interface PlanKeyNode {
 export interface RiskPrediction {
   id: string;
   eventType: string;
+  title?: string;
+  description?: string;
+  affectedAreas?: string[];
   probability: number;
   riskLevel: 'high' | 'medium' | 'low';
   predictedTime: string;
+  predictTime?: string;
   predictedRegion: string[];
   relatedHistoryEvents: string[];
   suggestions: string[];
@@ -216,6 +226,7 @@ export interface SpeakerRec {
   department: string;
   expertise: string[];
   suitabilityScore: number;
+  matchScore?: number;
   reason: string;
 }
 
@@ -223,6 +234,11 @@ export interface ChannelRec {
   id: string;
   channel: string;
   channelType: string;
+  name?: string;
+  type?: string;
+  weight?: number;
+  description?: string;
+  reach?: number;
   audienceCoverage: number;
   effectivenessScore: number;
   recommendedTime: string;
@@ -242,6 +258,7 @@ export interface WeeklyReport {
 export interface ReportSummary {
   totalOpinions: number;
   weekOnWeek: number;
+  weekOnWeekYoY?: number;
   positiveRatio: number;
   positiveWoW: number;
   negativeRatio: number;
@@ -250,10 +267,13 @@ export interface ReportSummary {
   warningWoW: number;
   avgResponseTime: number;
   responseTimeWoW: number;
+  resolvedCount?: number;
+  unresolvedCount?: number;
 }
 
 export interface DailyEmotionData {
   date: string;
+  count?: number;
   positive: number;
   neutral: number;
   negative: number;
@@ -264,6 +284,7 @@ export interface RegionRankItem {
   spreadSpeed: number;
   responseSpeed: number;
   efficiencyScore: number;
+  opinionCount?: number;
   rank: number;
   trend: 'up' | 'down' | 'stable';
 }
@@ -274,6 +295,7 @@ export interface DashboardStats {
   negativeRatio: number;
   warningCount: number;
   activeEvents: number;
+  totalEvents?: number;
   avgResponseTime: number;
   todayChange: {
     opinions: number;
@@ -289,4 +311,5 @@ export interface ProvinceHeatData {
   positive: number;
   neutral: number;
   negative: number;
+  negativeRatio?: number;
 }
