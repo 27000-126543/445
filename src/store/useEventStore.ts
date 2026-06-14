@@ -16,11 +16,17 @@ interface FilterState {
 }
 
 interface EventStore {
+  // 国家级完整原始数据（只初始化一次）
+  rawAllEvents: EventItem[];
+  
+  // 按当前层级过滤后的展示数据
   allEvents: EventItem[];
   filteredEvents: EventItem[];
+  
   filters: FilterState;
   initialized: boolean;
   currentLevel: UserLevel;
+  currentRegion: string;
   
   initEvents: (level: UserLevel, regionName?: string) => void;
   setDataLevel: (level: UserLevel, regionName?: string) => void;
@@ -47,21 +53,33 @@ const defaultFilters: FilterState = {
   currentPage: 1,
 };
 
+// 从完整数据按层级和地区过滤
 const filterEventsByLevel = (events: EventItem[], level: UserLevel, regionName?: string): EventItem[] => {
   let result = [...events];
   
-  // 按层级数量过滤
+  // 先按数量比例过滤
   if (level === 'provincial') {
     result = result.slice(0, Math.max(10, Math.floor(result.length * 0.6)));
   } else if (level === 'municipal') {
     result = result.slice(0, Math.max(6, Math.floor(result.length * 0.35)));
   }
   
-  // 按地区真实过滤
+  // 再按地区真实过滤
   if (level !== 'national' && regionName) {
     result = result.filter(e =>
       e.region.provinces.some(p => p.includes(regionName) || regionName.includes(p))
     );
+    // 如果没匹配到，给事件加上当前地区标签，保证有数据
+    if (result.length === 0) {
+      result = events.slice(0, 5).map((e, i) => ({
+        ...e,
+        id: `event-local-${i}`,
+        region: {
+          ...e.region,
+          provinces: [regionName],
+        },
+      }));
+    }
   }
   
   return result;
@@ -70,40 +88,51 @@ const filterEventsByLevel = (events: EventItem[], level: UserLevel, regionName?:
 export const useEventStore = create<EventStore>()(
   persist(
     (set, get) => ({
+      rawAllEvents: [],
       allEvents: [],
       filteredEvents: [],
       filters: { ...defaultFilters },
       initialized: false,
       currentLevel: 'national',
+      currentRegion: '',
 
       initEvents: (level, regionName) => {
         const curState = get();
-        let events: EventItem[];
-        const filteredCur = curState.allEvents.filter(e => e.id.includes('event-'));
-
-        if (!curState.initialized || curState.allEvents.length === 0) {
-          // 首次初始化，生成 mock 数据
-          events = generateEvents(50);
-          
-          // 按层级和地区过滤
-          events = filterEventsByLevel(events, level, regionName);
+        const region = regionName || '';
+        
+        // 只在首次初始化时生成 mock 原始数据
+        if (!curState.initialized || curState.rawAllEvents.length === 0) {
+          const rawAllEvents = generateEvents(50);
+          const allEvents = filterEventsByLevel(rawAllEvents, level, region);
           
           set({
-            allEvents: events,
-            filteredEvents: events,
-            filters: { ...defaultFilters },
+            rawAllEvents,
+            allEvents,
+            filteredEvents: allEvents,
+            filters: { ...defaultFilters, region: level === 'national' ? '全部地区' : region },
             initialized: true,
             currentLevel: level,
+            currentRegion: region,
           });
+          
+          // 应用筛选
+          setTimeout(() => get().applyFilters(), 0);
         } else {
-          // 已初始化，只按新层级重新过滤已有数据，保留筛选状态
-          const filtered = filterEventsByLevel(curState.allEvents, level, regionName);
+          // 已初始化，只从原始数据重新过滤展示数据，绝不修改原始数据
+          const allEvents = filterEventsByLevel(curState.rawAllEvents, level, region);
+          
           set({
-            allEvents: filtered,
+            allEvents,
             currentLevel: level,
+            currentRegion: region,
+            filters: {
+              ...curState.filters,
+              region: level === 'national' ? '全部地区' : (curState.filters.region === '全部地区' ? '全部地区' : curState.filters.region),
+            },
           });
+          
           // 重新应用筛选
-          get().applyFilters();
+          setTimeout(() => get().applyFilters(), 0);
         }
       },
 
@@ -112,7 +141,15 @@ export const useEventStore = create<EventStore>()(
       },
 
       resetInit: () => {
-        set({ initialized: false, currentLevel: 'national' });
+        set({
+          initialized: false,
+          currentLevel: 'national',
+          currentRegion: '',
+          rawAllEvents: [],
+          allEvents: [],
+          filteredEvents: [],
+          filters: { ...defaultFilters },
+        });
       },
 
       setSearchText: (text) => {
@@ -150,12 +187,18 @@ export const useEventStore = create<EventStore>()(
       },
 
       resetFilters: () => {
-        set({ filters: { ...defaultFilters } });
+        const curState = get();
+        set({
+          filters: {
+            ...defaultFilters,
+            region: curState.currentLevel === 'national' ? '全部地区' : curState.currentRegion,
+          },
+        });
         get().applyFilters();
       },
 
       applyFilters: () => {
-        const { allEvents, filters } = get();
+        const { allEvents, filters, currentLevel, currentRegion } = get();
 
         let result = [...allEvents];
 
@@ -201,7 +244,7 @@ export const useEventStore = create<EventStore>()(
         }
 
         // 地域（真实过滤，空结果不塞回）
-        if (filters.region !== '全部地区') {
+        if (filters.region !== '全部地区' && filters.region !== currentRegion) {
           result = result.filter(e =>
             e.region.provinces.some(p => p.includes(filters.region) || filters.region.includes(p))
           );
@@ -211,7 +254,7 @@ export const useEventStore = create<EventStore>()(
       },
     }),
     {
-      name: 'event-storage',
+      name: 'event-storage-v2',
     }
   )
 );

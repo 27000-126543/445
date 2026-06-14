@@ -6,11 +6,19 @@ import { generateWarnings, generateApprovalFlows } from '@/mock';
 import type { UserLevel } from '@/types';
 
 interface WarningApprovalStore {
+  // 国家级完整原始数据（只初始化一次）
+  rawWarnings: Warning[];
+  rawApprovalTodos: ApprovalFlow[];
+  rawApprovalDones: ApprovalFlow[];
+  
+  // 按当前层级过滤后的展示数据
   warnings: Warning[];
   approvalTodos: ApprovalFlow[];
   approvalDones: ApprovalFlow[];
+  
   initialized: boolean;
   currentLevel: UserLevel;
+  currentRegion: string;
   
   initData: (level: UserLevel, regionName?: string) => void;
   setDataLevel: (level: UserLevel, regionName?: string) => void;
@@ -28,95 +36,103 @@ interface WarningApprovalStore {
   removeTodo: (flowId: string) => void;
 }
 
-const filterByRegion = (items: any[], level: UserLevel, regionName?: string) => {
-  if (level === 'national' || !regionName) return items;
+// 过滤函数：从完整数据按层级和地区过滤
+const filterByLevel = <T extends { region?: string }>(
+  items: T[],
+  level: UserLevel,
+  regionName?: string
+): T[] => {
+  let result = [...items];
   
-  // 简单的 region 是字符串
-  return items.filter(item => {
-    if (typeof item.region === 'string') {
-      return item.region.includes(regionName) || regionName.includes(item.region);
-    }
-    return true;
-  });
+  // 先按数量比例过滤
+  if (level === 'provincial') {
+    result = result.slice(0, Math.max(5, Math.floor(result.length * 0.6)));
+  } else if (level === 'municipal') {
+    result = result.slice(0, Math.max(3, Math.floor(result.length * 0.35)));
+  }
+  
+  // 再按地区真实过滤
+  if (level !== 'national' && regionName) {
+    result = result.filter(item => {
+      if (typeof item.region === 'string') {
+        return item.region.includes(regionName) || regionName.includes(item.region);
+      }
+      return true;
+    });
+  }
+  
+  return result;
+};
+
+// 审批流不需要按地区过滤，只按数量比例
+const filterApprovals = <T extends ApprovalFlow>(
+  items: T[],
+  level: UserLevel,
+): T[] => {
+  let result = [...items];
+  if (level === 'provincial') {
+    result = result.slice(0, Math.max(3, Math.floor(result.length * 0.6)));
+  } else if (level === 'municipal') {
+    result = result.slice(0, Math.max(1, Math.floor(result.length * 0.35)));
+  }
+  return result;
 };
 
 export const useWarningApprovalStore = create<WarningApprovalStore>()(
   persist(
     (set, get) => ({
+      rawWarnings: [],
+      rawApprovalTodos: [],
+      rawApprovalDones: [],
+      
       warnings: [],
       approvalTodos: [],
       approvalDones: [],
+      
       initialized: false,
       currentLevel: 'national',
+      currentRegion: '',
 
       initData: (level, regionName) => {
-        // 只在首次初始化时生成 mock 数据
-        // 已初始化时只按层级过滤，不覆盖已有操作结果
         const curState = get();
-        const existingHasData = curState.warnings.length > 0
-          || curState.approvalTodos.length > 0
-          || curState.approvalDones.length > 0;
-
-        let warnings: Warning[];
-        let todos: ApprovalFlow[];
-        let dones: ApprovalFlow[];
-
-        if (!curState.initialized || !existingHasData) {
-          // 首次初始化，生成 mock 数据
-          warnings = generateWarnings(12);
-          const allTodos = generateApprovalFlows(5).filter(a => a.status.includes('pending'));
-          const allDones = generateApprovalFlows(8).filter(a => !a.status.includes('pending'));
-
-          // 按层级数量过滤
-          if (level === 'provincial') {
-            warnings = warnings.slice(0, 8);
-            todos = allTodos.slice(0, 4);
-            dones = allDones.slice(0, 6);
-          } else if (level === 'municipal') {
-            warnings = warnings.slice(0, 5);
-            todos = allTodos.slice(0, 2);
-            dones = allDones.slice(0, 4);
-          } else {
-            todos = allTodos;
-            dones = allDones;
-          }
-
-          // 按地区过滤（如果有地区名）
-          if (level !== 'national' && regionName) {
-            warnings = filterByRegion(warnings, level, regionName);
-          }
+        const region = regionName || '';
+        
+        // 只在首次初始化时生成 mock 原始数据
+        if (!curState.initialized || curState.rawWarnings.length === 0) {
+          const rawWarnings = generateWarnings(12);
+          const rawTodos = generateApprovalFlows(5).filter(a => a.status.includes('pending'));
+          const rawDones = generateApprovalFlows(8).filter(a => !a.status.includes('pending'));
+          
+          // 根据当前层级过滤出展示数据
+          const warnings = filterByLevel(rawWarnings, level, region);
+          const approvalTodos = filterApprovals(rawTodos, level);
+          const approvalDones = filterApprovals(rawDones, level);
+          
+          set({
+            rawWarnings,
+            rawApprovalTodos: rawTodos,
+            rawApprovalDones: rawDones,
+            warnings,
+            approvalTodos,
+            approvalDones,
+            initialized: true,
+            currentLevel: level,
+            currentRegion: region,
+          });
         } else {
-          // 已初始化，只按新层级过滤已有数据
-          warnings = curState.warnings;
-          todos = curState.approvalTodos;
-          dones = curState.approvalDones;
-
-          // 切换层级时按比例过滤已有数据，保留用户操作结果
-          if (level !== curState.currentLevel) {
-            if (level === 'provincial') {
-              warnings = warnings.slice(0, Math.max(5, Math.floor(warnings.length * 0.6)));
-              todos = todos.slice(0, Math.max(2, Math.floor(todos.length * 0.6)));
-              dones = dones.slice(0, Math.max(3, Math.floor(dones.length * 0.6)));
-            } else if (level === 'municipal') {
-              warnings = warnings.slice(0, Math.max(3, Math.floor(warnings.length * 0.35)));
-              todos = todos.slice(0, Math.max(1, Math.floor(todos.length * 0.35)));
-              dones = dones.slice(0, Math.max(2, Math.floor(dones.length * 0.35)));
-            }
-          }
-
-          // 按地区过滤
-          if (level !== 'national' && regionName) {
-            warnings = filterByRegion(warnings, level, regionName);
-          }
+          // 已初始化，只从原始数据重新过滤展示数据，绝不修改原始数据
+          const warnings = filterByLevel(curState.rawWarnings, level, region);
+          const approvalTodos = filterApprovals(curState.rawApprovalTodos, level);
+          const approvalDones = filterApprovals(curState.rawApprovalDones, level);
+          
+          set({
+            warnings,
+            approvalTodos,
+            approvalDones,
+            currentLevel: level,
+            currentRegion: region,
+          });
         }
-
-        set({
-          warnings,
-          approvalTodos: todos,
-          approvalDones: dones,
-          initialized: true,
-          currentLevel: level,
-        });
       },
 
       setDataLevel: (level, regionName) => {
@@ -124,24 +140,36 @@ export const useWarningApprovalStore = create<WarningApprovalStore>()(
       },
 
       resetInit: () => {
-        set({ initialized: false, currentLevel: 'national' });
+        set({
+          initialized: false,
+          currentLevel: 'national',
+          currentRegion: '',
+          rawWarnings: [],
+          rawApprovalTodos: [],
+          rawApprovalDones: [],
+          warnings: [],
+          approvalTodos: [],
+          approvalDones: [],
+        });
       },
 
       confirmWarning: (warningId) => {
         let newFlow: ApprovalFlow | null = null;
 
         set((state) => {
-          const warning = state.warnings.find(w => w.id === warningId);
+          const warning = state.rawWarnings.find(w => w.id === warningId);
           if (!warning) return state;
 
-          // 更新预警状态
-          const updatedWarnings = state.warnings.map(w =>
+          const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+          
+          // 修改原始数据（永久保存）
+          const updatedRawWarnings = state.rawWarnings.map(w =>
             w.id === warningId
-              ? { ...w, status: 'confirmed' as const, confirmTime: new Date().toISOString().replace('T', ' ').slice(0, 19) }
+              ? { ...w, status: 'confirmed' as const, confirmTime: now }
               : w
           );
 
-          // 创建审批单
+          // 创建审批单（同时保存到原始数据）
           newFlow = {
             id: `approval-flow-${Date.now()}`,
             warningId: warning.id,
@@ -157,13 +185,21 @@ export const useWarningApprovalStore = create<WarningApprovalStore>()(
             ],
             initiator: '系统自动发起',
             initiatorDept: '预警中心',
-            createdAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-            updatedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
+            createdAt: now,
+            updatedAt: now,
           };
 
+          const updatedRawTodos = [newFlow!, ...state.rawApprovalTodos];
+          
+          // 重新过滤展示数据（从新的原始数据按当前层级过滤）
+          const warnings = filterByLevel(updatedRawWarnings, state.currentLevel, state.currentRegion);
+          const approvalTodos = filterApprovals(updatedRawTodos, state.currentLevel);
+          
           return {
-            warnings: updatedWarnings,
-            approvalTodos: [newFlow!, ...state.approvalTodos],
+            rawWarnings: updatedRawWarnings,
+            rawApprovalTodos: updatedRawTodos,
+            warnings,
+            approvalTodos,
           };
         });
 
@@ -171,22 +207,33 @@ export const useWarningApprovalStore = create<WarningApprovalStore>()(
       },
 
       dismissWarning: (warningId) => {
-        set((state) => ({
-          warnings: state.warnings.map(w =>
+        set((state) => {
+          const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+          
+          // 修改原始数据
+          const updatedRawWarnings = state.rawWarnings.map(w =>
             w.id === warningId
-              ? { ...w, status: 'dismissed' as const, resolveTime: new Date().toISOString().replace('T', ' ').slice(0, 19) }
+              ? { ...w, status: 'dismissed' as const, resolveTime: now }
               : w
-          ),
-        }));
+          );
+          
+          // 重新过滤展示数据
+          const warnings = filterByLevel(updatedRawWarnings, state.currentLevel, state.currentRegion);
+          
+          return {
+            rawWarnings: updatedRawWarnings,
+            warnings,
+          };
+        });
       },
 
       getWarningById: (id) => {
-        return get().warnings.find(w => w.id === id);
+        return get().warnings.find(w => w.id === id) || get().rawWarnings.find(w => w.id === id);
       },
 
       approveFlow: (flowId, opinion) => {
         set((state) => {
-          const flow = state.approvalTodos.find(f => f.id === flowId);
+          const flow = state.rawApprovalTodos.find(f => f.id === flowId);
           if (!flow) return state;
 
           const newStep = flow.currentStep + 1;
@@ -199,9 +246,12 @@ export const useWarningApprovalStore = create<WarningApprovalStore>()(
               : s
           );
 
+          let updatedRawTodos = state.rawApprovalTodos;
+          let updatedRawDones = state.rawApprovalDones;
+          
           // 判断是否完成审批
           if (newStep > 3) {
-            // 完成，移到已办
+            // 完成，从 rawTodos 移到 rawDones
             const doneFlow: ApprovalFlow = {
               ...flow,
               status: 'approved',
@@ -209,20 +259,16 @@ export const useWarningApprovalStore = create<WarningApprovalStore>()(
               steps: updatedSteps,
               updatedAt: now,
             };
-            return {
-              approvalTodos: state.approvalTodos.filter(f => f.id !== flowId),
-              approvalDones: [doneFlow, ...state.approvalDones],
+            updatedRawTodos = state.rawApprovalTodos.filter(f => f.id !== flowId);
+            updatedRawDones = [doneFlow, ...state.rawApprovalDones];
+          } else {
+            // 继续下一步
+            const statusMap: Record<number, ApprovalFlow['status']> = {
+              2: 'pending_edu',
+              3: 'pending_propaganda',
             };
-          }
-
-          // 继续下一步
-          const statusMap: Record<number, ApprovalFlow['status']> = {
-            2: 'pending_edu',
-            3: 'pending_propaganda',
-          };
-
-          return {
-            approvalTodos: state.approvalTodos.map(f =>
+            
+            updatedRawTodos = state.rawApprovalTodos.map(f =>
               f.id === flowId
                 ? {
                     ...f,
@@ -232,14 +278,25 @@ export const useWarningApprovalStore = create<WarningApprovalStore>()(
                     updatedAt: now,
                   }
                 : f
-            ),
+            );
+          }
+
+          // 重新过滤展示数据
+          const approvalTodos = filterApprovals(updatedRawTodos, state.currentLevel);
+          const approvalDones = filterApprovals(updatedRawDones, state.currentLevel);
+          
+          return {
+            rawApprovalTodos: updatedRawTodos,
+            rawApprovalDones: updatedRawDones,
+            approvalTodos,
+            approvalDones,
           };
         });
       },
 
       rejectFlow: (flowId, opinion) => {
         set((state) => {
-          const flow = state.approvalTodos.find(f => f.id === flowId);
+          const flow = state.rawApprovalTodos.find(f => f.id === flowId);
           if (!flow) return state;
 
           const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
@@ -250,32 +307,47 @@ export const useWarningApprovalStore = create<WarningApprovalStore>()(
               : s
           );
 
+          // 从 rawTodos 移到 rawDones
           const doneFlow: ApprovalFlow = {
             ...flow,
             status: 'rejected',
             steps: updatedSteps,
             updatedAt: now,
           };
-
+          
+          const updatedRawTodos = state.rawApprovalTodos.filter(f => f.id !== flowId);
+          const updatedRawDones = [doneFlow, ...state.rawApprovalDones];
+          
+          // 重新过滤展示数据
+          const approvalTodos = filterApprovals(updatedRawTodos, state.currentLevel);
+          const approvalDones = filterApprovals(updatedRawDones, state.currentLevel);
+          
           return {
-            approvalTodos: state.approvalTodos.filter(f => f.id !== flowId),
-            approvalDones: [doneFlow, ...state.approvalDones],
+            rawApprovalTodos: updatedRawTodos,
+            rawApprovalDones: updatedRawDones,
+            approvalTodos,
+            approvalDones,
           };
         });
       },
 
       getTodoById: (id) => {
-        return get().approvalTodos.find(f => f.id === id);
+        return get().approvalTodos.find(f => f.id === id) || get().rawApprovalTodos.find(f => f.id === id);
       },
 
       removeTodo: (flowId) => {
-        set((state) => ({
-          approvalTodos: state.approvalTodos.filter(f => f.id !== flowId),
-        }));
+        set((state) => {
+          const updatedRawTodos = state.rawApprovalTodos.filter(f => f.id !== flowId);
+          const approvalTodos = filterApprovals(updatedRawTodos, state.currentLevel);
+          return {
+            rawApprovalTodos: updatedRawTodos,
+            approvalTodos,
+          };
+        });
       },
     }),
     {
-      name: 'warning-approval-storage',
+      name: 'warning-approval-storage-v2',
     }
   )
 );

@@ -280,32 +280,75 @@ export default function PlanDetail() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.05 }}
-                        className="bg-slate-900/50 border border-slate-700/50 rounded-xl p-5"
+                        className="bg-slate-900/50 border border-slate-700/50 rounded-xl p-5 hover:border-red-500/30 transition-colors"
                       >
                         <div className="flex items-start justify-between mb-3">
-                          <h4 className="text-white font-medium">{risk.title}</h4>
+                          <h4 className="text-white font-medium text-base">{risk.title || risk.eventType}</h4>
                           <span className={cn('text-xs px-2 py-0.5 rounded border', riskInfo.className)}>
                             {riskInfo.label}
                           </span>
                         </div>
-                        <p className="text-slate-500 text-sm mb-4 line-clamp-2">
+                        <p className="text-slate-400 text-sm mb-4 leading-relaxed">
                           {risk.description}
                         </p>
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-3">
-                            <span className="flex items-center gap-1 text-slate-400">
-                              <TrendingUp className="w-3 h-3 text-red-400" />
-                              发生概率 {risk.probability}%
-                            </span>
-                            <span className="flex items-center gap-1 text-slate-400">
-                              <MapPin className="w-3 h-3" />
-                              {risk.affectedAreas.length}个地区
+                        
+                        {/* 风险概率条 */}
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between text-xs mb-1.5">
+                            <span className="text-slate-400">发生概率</span>
+                            <span className={cn('font-medium tabular-nums',
+                              risk.probability > 70 ? 'text-red-400' :
+                              risk.probability > 40 ? 'text-yellow-400' : 'text-green-400'
+                            )}>
+                              {risk.probability}%
                             </span>
                           </div>
-                          <span className="flex items-center gap-1 text-slate-500">
-                            <Clock className="w-3 h-3" />
-                            {risk.predictTime}
-                          </span>
+                          <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                            <div
+                              className={cn('h-full rounded-full transition-all',
+                                risk.probability > 70 ? 'bg-gradient-to-r from-red-500 to-red-400' :
+                                risk.probability > 40 ? 'bg-gradient-to-r from-yellow-500 to-orange-400' :
+                                'bg-gradient-to-r from-green-500 to-emerald-400'
+                              )}
+                              style={{ width: `${risk.probability}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* 详细信息 */}
+                        <div className="grid grid-cols-2 gap-3 text-xs mb-4 p-3 bg-slate-800/50 rounded-lg">
+                          <div>
+                            <p className="text-slate-500 mb-1">风险类型</p>
+                            <p className="text-white font-medium">{risk.eventType}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500 mb-1">预测时间</p>
+                            <p className="text-white font-medium">{risk.predictTime || risk.predictedTime}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500 mb-1">影响区域</p>
+                            <p className="text-white font-medium">{(risk.affectedAreas || risk.predictedRegion || []).slice(0, 2).join('、')}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500 mb-1">涉及地区数</p>
+                            <p className="text-white font-medium">{(risk.affectedAreas || risk.predictedRegion || []).length} 个地区</p>
+                          </div>
+                        </div>
+
+                        {/* 应对建议 */}
+                        <div className="text-xs">
+                          <p className="text-slate-500 mb-2 flex items-center gap-1">
+                            <Lightbulb className="w-3.5 h-3.5 text-yellow-400" />
+                            应对建议
+                          </p>
+                          <ul className="space-y-1">
+                            {(risk.suggestions || []).slice(0, 2).map((sug, i) => (
+                              <li key={i} className="text-slate-400 flex items-start gap-1.5">
+                                <span className="text-blue-400 mt-0.5">•</span>
+                                {sug}
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       </motion.div>
                     );
@@ -386,43 +429,60 @@ export default function PlanDetail() {
               </h3>
               {channels.length > 0 ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {channels.map((ch, index) => (
-                    <motion.div
-                      key={ch.id}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="bg-slate-900/50 border border-slate-700/50 rounded-xl p-5"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-slate-700/50 flex items-center justify-center">
-                            <Lightbulb className="w-5 h-5 text-purple-400" />
+                  {channels.map((ch, index) => {
+                    const weightPercent = Math.round((ch.weight || 0) * 100);
+                    return (
+                      <motion.div
+                        key={ch.id}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="bg-slate-900/50 border border-slate-700/50 rounded-xl p-5 hover:border-purple-500/30 transition-colors"
+                      >
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center border border-purple-500/30">
+                              <Lightbulb className="w-6 h-6 text-purple-400" />
+                            </div>
+                            <div>
+                              <h4 className="text-white font-medium text-base">{ch.name}</h4>
+                              <p className="text-xs text-slate-500">{ch.type || ch.channelType}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xl font-bold text-purple-400 tabular-nums">{weightPercent}%</div>
+                            <p className="text-xs text-slate-500">推荐占比</p>
+                          </div>
+                        </div>
+                        <p className="text-slate-400 text-sm mb-4 leading-relaxed">
+                          {ch.description}
+                        </p>
+                        <div className="grid grid-cols-3 gap-3 text-xs mb-4 p-3 bg-slate-800/50 rounded-lg">
+                          <div>
+                            <p className="text-slate-500 mb-1">适用地区</p>
+                            <p className="text-white font-medium">全国</p>
                           </div>
                           <div>
-                            <h4 className="text-white font-medium">{ch.name}</h4>
-                            <p className="text-xs text-slate-500">{ch.type}</p>
+                            <p className="text-slate-500 mb-1">推荐时间</p>
+                            <p className="text-white font-medium">{ch.recommendedTime}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500 mb-1">覆盖人数</p>
+                            <p className="text-white font-medium">{(ch.reach || ch.audienceCoverage || 0).toLocaleString()}</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-lg font-bold text-purple-400">{ch.weight}%</div>
-                          <p className="text-xs text-slate-500">权重占比</p>
+                        <div className="flex items-center justify-between text-xs border-t border-slate-700/50 pt-3">
+                          <span className="text-slate-400">
+                            效果评分 <span className="text-green-400 font-medium">{ch.effectivenessScore}分</span>
+                          </span>
+                          <span className="flex items-center gap-1 text-blue-400 font-medium">
+                            <ChevronRight className="w-3 h-3" />
+                            建议优先发布
+                          </span>
                         </div>
-                      </div>
-                      <p className="text-slate-500 text-sm mb-3 line-clamp-2">
-                        {ch.description}
-                      </p>
-                      <div className="flex items-center justify-between text-xs border-t border-slate-700/50 pt-3">
-                        <span className="text-slate-400">
-                          预计覆盖 <span className="text-white font-medium">{ch.reach.toLocaleString()}</span> 人
-                        </span>
-                        <span className="flex items-center gap-1 text-green-400">
-                          <ChevronRight className="w-3 h-3" />
-                          建议优先发布
-                        </span>
-                      </div>
-                    </motion.div>
-                  ))}
+                      </motion.div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-16">

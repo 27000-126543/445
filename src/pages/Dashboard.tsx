@@ -298,12 +298,12 @@ export default function Dashboard() {
 
       {/* 主要内容区 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 左侧 - 地图 */}
+        {/* 左侧 - 地图或数据卡 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          key={`map-${level}-${regionName}`}
+          key={`map-${level}-${regionName}-${dataKey}`}
           className="lg:col-span-2 bg-slate-800/30 border border-slate-700/50 rounded-xl p-5"
         >
           <div className="flex items-center justify-between mb-4">
@@ -345,9 +345,82 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
-          <div className="h-[400px]">
-            <ChinaHeatMap data={heatData} onProvinceClick={handleProvinceClick} />
-          </div>
+          
+          {/* 市级视角：显示数据卡而非全国地图 */}
+          {level === 'municipal' ? (
+            <div className="h-[400px] flex items-center justify-center">
+              {heatData.length > 0 ? (
+                <div className="w-full max-w-md">
+                  <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-2xl p-6">
+                    <div className="text-center mb-6">
+                      <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                        <MapPin className="w-8 h-8 text-white" />
+                      </div>
+                      <h3 className="text-xl font-bold text-white mb-1">{regionName}</h3>
+                      <p className="text-slate-400 text-sm">舆情热力数据总览</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                      {heatData.map((item, idx) => {
+                        const ratio = (item.negativeRatio || 30);
+                        const heatColor = ratio > 45 ? 'text-red-400' : ratio > 30 ? 'text-yellow-400' : 'text-green-400';
+                        const heatBg = ratio > 45 ? 'bg-red-500/10 border-red-500/30' : ratio > 30 ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-green-500/10 border-green-500/30';
+                        return (
+                          <div key={idx} className={cn('p-4 rounded-xl border', heatBg)}>
+                            <p className="text-slate-400 text-xs mb-1">{item.name}</p>
+                            <p className="text-2xl font-bold text-white tabular-nums mb-1">
+                              {item.value.toLocaleString()}
+                            </p>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-500">舆情量</span>
+                              <span className={heatColor}>
+                                负面 {Math.round(ratio)}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* 负面占比进度条 */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">整体负面占比</span>
+                        <span className="text-white font-medium">
+                          {Math.round(heatData.reduce((a, b) => a + (b.negativeRatio || 0), 0) / heatData.length)}%
+                        </span>
+                      </div>
+                      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-yellow-500 to-red-500 rounded-full"
+                          style={{ width: `${Math.min(100, heatData.reduce((a, b) => a + (b.negativeRatio || 0), 0) / heatData.length)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <MapPin className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                  <p className="text-slate-400 mb-1">暂无{regionName}的热力数据</p>
+                  <p className="text-xs text-slate-500">切回国家级视角查看全国地图</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="h-[400px]">
+              {heatData.length > 0 ? (
+                <ChinaHeatMap data={heatData} onProvinceClick={handleProvinceClick} />
+              ) : (
+                <div className="h-full flex items-center justify-center">
+                  <div className="text-center">
+                    <MapPin className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                    <p className="text-slate-400">暂无热力数据</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </motion.div>
 
         {/* 右侧 - 热门事件 */}

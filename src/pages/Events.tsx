@@ -47,20 +47,14 @@ export default function Events() {
     initEvents(level, regionName);
   }, [level, regionName, initEvents]);
 
-  // 按层级筛选（全局收窄）
-  let levelFilteredEvents = filteredEvents;
-  if (level === 'provincial' && regionName) {
-    levelFilteredEvents = filteredEvents.filter((_, i) => i < Math.floor(filteredEvents.length * 0.6));
-  } else if (level === 'municipal' && regionName) {
-    levelFilteredEvents = filteredEvents.filter((_, i) => i < Math.floor(filteredEvents.length * 0.35));
-  }
-
+  // 注意：filteredEvents 已经在 store 中按层级和地域过滤过了，此处无需重复过滤
   const currentPage = filters.currentPage;
-  const paginatedEvents = levelFilteredEvents.slice(
+  const paginatedEvents = filteredEvents.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
-  const totalPages = Math.max(1, Math.ceil(levelFilteredEvents.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredEvents.length / pageSize));
+  const totalCount = filteredEvents.length;
 
   const getStatusLabel = (status: string) => {
     const map: Record<string, { label: string; className: string }> = {
@@ -359,10 +353,10 @@ export default function Events() {
         {/* 分页 */}
         <div className="px-5 py-4 border-t border-slate-700/50 flex items-center justify-between">
           <p className="text-sm text-slate-400">
-            共 <span className="text-white font-medium">{levelFilteredEvents.length}</span> 条记录
+            共 <span className="text-white font-medium">{totalCount}</span> 条记录
             ，第 <span className="text-white">{currentPage}</span>
             /<span className="text-white">{totalPages}</span> 页
-            {levelFilteredEvents.length !== allEvents.length && (
+            {totalCount !== allEvents.length && (
               <span className="ml-2 text-xs text-slate-500">（已筛选）</span>
             )}
           </p>
