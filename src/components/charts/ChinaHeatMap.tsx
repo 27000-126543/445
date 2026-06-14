@@ -1,14 +1,16 @@
 
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import type { ProvinceHeatData } from '@/types';
+import type { ProvinceHeatData, DashboardMetric, UserLevel } from '@/types';
 
 interface ChinaHeatMapProps {
   data: ProvinceHeatData[];
+  metric?: DashboardMetric;
+  level?: UserLevel;
+  scopeName?: string;
   onProvinceClick?: (province: ProvinceHeatData) => void;
 }
 
-// 简化版中国省份位置（相对坐标）
 const provincePositions: Record<string, { x: number; y: number; w: number; h: number }> = {
   '黑龙江': { x: 75, y: 5, w: 70, h: 50 },
   '吉林': { x: 85, y: 55, w: 45, h: 30 },
@@ -46,30 +48,155 @@ const provincePositions: Record<string, { x: number; y: number; w: number; h: nu
   '云南': { x: 60, y: 145, w: 35, h: 45 },
 };
 
-export default function ChinaHeatMap({ data, onProvinceClick }: ChinaHeatMapProps) {
+const metricLabelMap: Record<DashboardMetric, string> = {
+  total: '舆情总量',
+  negative: '负面占比',
+  speed: '传播速度',
+  warning: '预警数量',
+};
+const metricUnitMap: Record<DashboardMetric, string> = {
+  total: '条',
+  negative: '%',
+  speed: '级',
+  warning: '条',
+};
+
+const getMetricValue = (d: ProvinceHeatData, metric: DashboardMetric): number => {
+  switch (metric) {
+    case 'total': return d.value || 0;
+    case 'negative': return d.negativeRatio || 0;
+    case 'speed': return d.spreadSpeed || 0;
+    case 'warning': return d.warningCount || 0;
+  }
+};
+
+export default function ChinaHeatMap({
+  data,
+  metric = 'total',
+  level = 'national',
+  scopeName,
+  onProvinceClick,
+}: ChinaHeatMapProps) {
   const [hoveredProvince, setHoveredProvince] = useState<string | null>(null);
 
+  const showNationalMap = level === 'national';
+  const displayData = showNationalMap ? data : data;
+
   const { maxValue, minValue } = useMemo(() => {
-    const values = data.map(d => d.value);
+    const values = displayData.map(d => getMetricValue(d, metric));
+    if (values.length === 0) return { maxValue: 1, minValue: 0 };
     return {
-      maxValue: Math.max(...values),
-      minValue: Math.min(...values),
+      maxValue: Math.max(...values, 1),
+      minValue: Math.min(...values, 0),
     };
-  }, [data]);
+  }, [displayData, metric]);
 
   const getColor = (value: number) => {
+    if (maxValue === minValue) {
+      return metric === 'negative' ? 'rgb(239, 68, 68)' : 'rgb(59, 130, 246)';
+    }
     const ratio = (value - minValue) / (maxValue - minValue);
+    if (metric === 'negative') {
+      const r = Math.round(120 + ratio * 120);
+      const g = Math.round(200 - ratio * 150);
+      const b = Math.round(200 - ratio * 150);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+    if (metric === 'speed') {
+      const r = Math.round(200 + ratio * 40);
+      const g = Math.round(150 - ratio * 80);
+      const b = Math.round(100 - ratio * 60);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+    if (metric === 'warning') {
+      const r = Math.round(240 - ratio * 40);
+      const g = Math.round(180 - ratio * 120);
+      const b = Math.round(80 + ratio * 30);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
     const r = Math.round(30 + ratio * 200);
     const g = Math.round(80 - ratio * 40);
     const b = Math.round(150 - ratio * 100);
     return `rgb(${r}, ${g}, ${b})`;
   };
 
-  const getProvinceData = (name: string) => {
-    return data.find(d => d.name === name);
-  };
+  const getProvinceData = (name: string) => data.find(d => d.name === name);
+  const getRegionName = (s: string) => s.replace(/(省|市|自治区|特别行政区)$/g, '');
+  const hoveredData = hoveredProvince
+    ? data.find(d => {
+        const dn = getRegionName(d.name);
+        const hn = getRegionName(hoveredProvince);
+        return dn === hn || dn.includes(hn) || hn.includes(dn);
+      })
+    : null;
 
-  const hoveredData = hoveredProvince ? getProvinceData(hoveredProvince) : null;
+  if (!showNationalMap && data.length <= 1) {
+    return null;
+  }
+
+  if (!showNationalMap) {
+    const sorted = [...data].sort((a, b) => getMetricValue(b, metric) - getMetricValue(a, metric));
+    const totalMetric = data.reduce((sum, d) => sum + getMetricValue(d, metric), 0);
+    return (
+      <div className="relative w-full h-full flex flex-col">
+        <div className="text-xs text-slate-500 mb-3">
+          {scopeName} · 共 {data.length} 个区域，{metricLabelMap[metric]}合计 {totalMetric.toLocaleString()}{metricUnitMap[metric]}
+        </div>
+        <div className="flex-1 overflow-y-auto pr-2 space-y-2">
+          {sorted.map((item, idx) => {
+            const val = getMetricValue(item, metric);
+            const pct = sorted.length > 0 ? (val / Math.max(1, getMetricValue(sorted[0], metric))) * 100 : 0;
+            return (
+              <motion.div
+                key={item.name}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.03 }}
+                onClick={() => onProvinceClick?.(item)}
+                className="group p-3 rounded-lg bg-slate-800/50 border border-slate-700/30 hover:border-blue-500/40 cursor-pointer transition-colors"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded bg-slate-700/50 text-xs text-slate-300 flex items-center justify-center font-medium">
+                      {idx + 1}
+                    </span>
+                    <span className="text-white text-sm font-medium">{item.name}</span>
+                  </div>
+                  <span className="text-right">
+                    <span className="text-lg font-bold tabular-nums" style={{ color: getColor(val) }}>
+                      {metric === 'negative' || metric === 'speed' ? val.toFixed(1) : val.toLocaleString()}
+                    </span>
+                    <span className="text-xs text-slate-500 ml-1">{metricUnitMap[metric]}</span>
+                  </span>
+                </div>
+                <div className="h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${Math.max(5, pct)}%`, backgroundColor: getColor(val) }}
+                  />
+                </div>
+                <div className="flex items-center justify-between mt-2 text-[11px] text-slate-500">
+                  <span>舆情 {item.value.toLocaleString()}</span>
+                  <span>负面 {Math.round(item.negativeRatio || 0)}%</span>
+                  <span>预警 {item.warningCount || 0}</span>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  const visibleProvinceNames = new Set(data.map(d => {
+    const dn = getRegionName(d.name);
+    for (const k of Object.keys(provincePositions)) {
+      if (getRegionName(k) === dn || getRegionName(k).includes(dn) || dn.includes(getRegionName(k))) {
+        return k;
+      }
+    }
+    return d.name;
+  }));
 
   return (
     <div className="relative w-full h-full">
@@ -86,8 +213,9 @@ export default function ChinaHeatMap({ data, onProvinceClick }: ChinaHeatMapProp
 
         {Object.entries(provincePositions).map(([name, pos]) => {
           const provinceData = getProvinceData(name);
-          const value = provinceData?.value || 0;
-          const color = getColor(value);
+          const hasData = visibleProvinceNames.has(name);
+          const value = getMetricValue(provinceData || { name, value: 0, positive: 0, neutral: 0, negative: 0 }, metric);
+          const color = provinceData ? getColor(value) : 'rgba(100, 116, 139, 0.15)';
           const isHovered = hoveredProvince === name;
 
           return (
@@ -99,7 +227,7 @@ export default function ChinaHeatMap({ data, onProvinceClick }: ChinaHeatMapProp
               onMouseEnter={() => setHoveredProvince(name)}
               onMouseLeave={() => setHoveredProvince(null)}
               onClick={() => provinceData && onProvinceClick?.(provinceData)}
-              className="cursor-pointer"
+              className={provinceData ? 'cursor-pointer' : 'cursor-default'}
             >
               <rect
                 x={pos.x}
@@ -108,11 +236,11 @@ export default function ChinaHeatMap({ data, onProvinceClick }: ChinaHeatMapProp
                 height={pos.h}
                 rx={pos.w > 15 ? 2 : 1}
                 fill={color}
-                stroke={isHovered ? '#60A5FA' : 'rgba(255,255,255,0.1)'}
+                stroke={isHovered ? '#60A5FA' : hasData ? 'rgba(96, 165, 250, 0.3)' : 'rgba(100, 116, 139, 0.2)'}
                 strokeWidth={isHovered ? 0.8 : 0.3}
                 filter={isHovered ? 'url(#glow)' : undefined}
                 className="transition-all duration-200"
-                opacity={isHovered ? 1 : 0.85}
+                opacity={isHovered ? 1 : (provinceData ? 0.85 : 0.4)}
               />
               {pos.w > 20 && pos.h > 15 && (
                 <text
@@ -120,7 +248,7 @@ export default function ChinaHeatMap({ data, onProvinceClick }: ChinaHeatMapProp
                   y={pos.y + pos.h / 2 + 2}
                   textAnchor="middle"
                   fontSize={pos.w > 30 ? 4 : 3}
-                  fill="rgba(255,255,255,0.9)"
+                  fill={provinceData ? 'rgba(255,255,255,0.9)' : 'rgba(100,116,139,0.5)'}
                   className="pointer-events-none select-none"
                 >
                   {name.length > 3 ? name.slice(0, 2) : name}
@@ -140,6 +268,15 @@ export default function ChinaHeatMap({ data, onProvinceClick }: ChinaHeatMapProp
         >
           <h4 className="text-white font-semibold text-base mb-3">{hoveredProvince}</h4>
           <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 text-sm">{metricLabelMap[metric]}</span>
+              <span className="text-white text-sm font-bold tabular-nums">
+                {metric === 'negative' || metric === 'speed'
+                  ? getMetricValue(hoveredData, metric).toFixed(1)
+                  : getMetricValue(hoveredData, metric).toLocaleString()}
+                <span className="text-slate-500 ml-1 font-normal">{metricUnitMap[metric]}</span>
+              </span>
+            </div>
             <div className="flex justify-between">
               <span className="text-slate-400 text-sm">舆情总量</span>
               <span className="text-white text-sm font-medium">
@@ -147,9 +284,9 @@ export default function ChinaHeatMap({ data, onProvinceClick }: ChinaHeatMapProp
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400 text-sm">正面</span>
-              <span className="text-green-400 text-sm">
-                {hoveredData.positive.toLocaleString()}
+              <span className="text-slate-400 text-sm">负面</span>
+              <span className="text-red-400 text-sm">
+                {hoveredData.negative.toLocaleString()} ({Math.round(hoveredData.negativeRatio || 0)}%)
               </span>
             </div>
             <div className="flex justify-between">
@@ -159,20 +296,45 @@ export default function ChinaHeatMap({ data, onProvinceClick }: ChinaHeatMapProp
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400 text-sm">负面</span>
-              <span className="text-red-400 text-sm">
-                {hoveredData.negative.toLocaleString()}
+              <span className="text-slate-400 text-sm">正面</span>
+              <span className="text-green-400 text-sm">
+                {hoveredData.positive.toLocaleString()}
               </span>
             </div>
+            <div className="flex justify-between pt-1 border-t border-slate-700/50">
+              <span className="text-slate-400 text-sm">传播速度</span>
+              <span className="text-orange-400 text-sm">{hoveredData.spreadSpeed || 0} 级</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400 text-sm">预警数量</span>
+              <span className="text-yellow-400 text-sm">{hoveredData.warningCount || 0} 条</span>
+            </div>
           </div>
+          {onProvinceClick && (
+            <div className="mt-3 pt-3 border-t border-slate-700/50 text-xs text-blue-400 text-center">
+              点击进入{hoveredProvince}视角 →
+            </div>
+          )}
         </motion.div>
       )}
 
       {/* 图例 */}
       <div className="absolute bottom-4 left-4 flex items-center gap-2">
         <span className="text-slate-400 text-xs">低</span>
-        <div className="w-24 h-2 rounded-full bg-gradient-to-r from-blue-600 via-purple-500 to-red-500" />
+        <div
+          className="w-24 h-2 rounded-full"
+          style={{
+            background: metric === 'negative'
+              ? 'linear-gradient(to right, rgb(120, 200, 200), rgb(239, 68, 68))'
+              : metric === 'speed'
+                ? 'linear-gradient(to right, rgb(200, 150, 100), rgb(240, 70, 40))'
+                : metric === 'warning'
+                  ? 'linear-gradient(to right, rgb(240, 180, 80), rgb(200, 60, 110))'
+                  : 'linear-gradient(to right, rgb(30, 80, 150), rgb(230, 40, 50))',
+          }}
+        />
         <span className="text-slate-400 text-xs">高</span>
+        <span className="text-slate-500 text-xs ml-2">{metricLabelMap[metric]}</span>
       </div>
     </div>
   );

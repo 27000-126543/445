@@ -305,6 +305,8 @@ export interface DashboardStats {
   };
 }
 
+export type DashboardMetric = 'total' | 'negative' | 'speed' | 'warning';
+
 export interface ProvinceHeatData {
   name: string;
   value: number;
@@ -312,4 +314,7 @@ export interface ProvinceHeatData {
   neutral: number;
   negative: number;
   negativeRatio?: number;
+  spreadSpeed?: number;
+  warningCount?: number;
+  cityData?: ProvinceHeatData[];
 }

@@ -1,6 +1,6 @@
 
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Search,
@@ -26,7 +26,10 @@ const regions = ['全部地区', '北京', '上海', '广东', '江苏', '浙江
 
 export default function Events() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { level, regionName } = useUserStore();
+  const presetRegion = (location.state as { presetRegion?: string } | null)?.presetRegion;
+  const appliedPreset = useRef(false);
   const {
     allEvents,
     filteredEvents,
@@ -39,6 +42,7 @@ export default function Events() {
     setTimeRange,
     setRegion,
     setCurrentPage,
+    resetFilters,
   } = useEventStore();
 
   const pageSize = 10;
@@ -46,6 +50,25 @@ export default function Events() {
   useEffect(() => {
     initEvents(level, regionName);
   }, [level, regionName, initEvents]);
+
+  useEffect(() => {
+    if (presetRegion && !appliedPreset.current) {
+      appliedPreset.current = true;
+      setTimeout(() => {
+        const normalize = (s: string) => s.replace(/(省|市|自治区|特别行政区|区)$/g, '');
+        const target = normalize(presetRegion);
+        const matched = regions.find(r => r !== '全部地区' && normalize(r).includes(target));
+        if (matched) {
+          setRegion(matched);
+        } else {
+          setRegion(presetRegion);
+        }
+      }, 0);
+    }
+    return () => {
+      appliedPreset.current = false;
+    };
+  }, [presetRegion, setRegion]);
 
   // 注意：filteredEvents 已经在 store 中按层级和地域过滤过了，此处无需重复过滤
   const currentPage = filters.currentPage;
