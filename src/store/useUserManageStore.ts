@@ -1,5 +1,6 @@
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export interface SystemUser {
   id: string;
@@ -14,7 +15,9 @@ export interface SystemUser {
 
 interface UserManageStore {
   users: SystemUser[];
+  initialized: boolean;
   initUsers: () => void;
+  resetInit: () => void;
   addUser: (user: Omit<SystemUser, 'id' | 'lastLogin'>) => void;
   updateUser: (id: string, updates: Partial<SystemUser>) => void;
   deleteUser: (id: string) => void;
@@ -33,56 +36,72 @@ const initialUsers: SystemUser[] = [
   { id: '8', name: '周分析', username: 'zhoufx', level: 'municipal', region: '杭州市', role: '舆情分析员', status: 'active', lastLogin: '2024-06-14 09:00' },
 ];
 
-export const useUserManageStore = create<UserManageStore>((set, get) => ({
-  users: [],
+export const useUserManageStore = create<UserManageStore>()(
+  persist(
+    (set, get) => ({
+      users: [],
+      initialized: false,
 
-  initUsers: () => {
-    set({ users: [...initialUsers] });
-  },
+      initUsers: () => {
+        if (get().initialized && get().users.length > 0) {
+          // 已初始化且有数据，不重新生成
+          return;
+        }
+        set({ users: [...initialUsers], initialized: true });
+      },
 
-  addUser: (userData) => {
-    const newUser: SystemUser = {
-      ...userData,
-      id: `user-${Date.now()}`,
-      lastLogin: '-',
-    };
-    set((state) => ({
-      users: [newUser, ...state.users],
-    }));
-  },
+      resetInit: () => {
+        set({ initialized: false });
+      },
 
-  updateUser: (id, updates) => {
-    set((state) => ({
-      users: state.users.map(u =>
-        u.id === id ? { ...u, ...updates } : u
-      ),
-    }));
-  },
+      addUser: (userData) => {
+        const newUser: SystemUser = {
+          ...userData,
+          id: `user-${Date.now()}`,
+          lastLogin: '-',
+        };
+        set((state) => ({
+          users: [newUser, ...state.users],
+        }));
+      },
 
-  deleteUser: (id) => {
-    set((state) => ({
-      users: state.users.filter(u => u.id !== id),
-    }));
-  },
+      updateUser: (id, updates) => {
+        set((state) => ({
+          users: state.users.map(u =>
+            u.id === id ? { ...u, ...updates } : u
+          ),
+        }));
+      },
 
-  searchUsers: (text) => {
-    if (!text) return get().users;
-    const t = text.toLowerCase();
-    return get().users.filter(u =>
-      u.name.includes(text) ||
-      u.username.toLowerCase().includes(t) ||
-      u.role.includes(text) ||
-      u.region.includes(text)
-    );
-  },
+      deleteUser: (id) => {
+        set((state) => ({
+          users: state.users.filter(u => u.id !== id),
+        }));
+      },
 
-  toggleStatus: (id) => {
-    set((state) => ({
-      users: state.users.map(u =>
-        u.id === id
-          ? { ...u, status: u.status === 'active' ? 'disabled' : 'active' }
-          : u
-      ),
-    }));
-  },
-}));
+      searchUsers: (text) => {
+        if (!text) return get().users;
+        const t = text.toLowerCase();
+        return get().users.filter(u =>
+          u.name.includes(text) ||
+          u.username.toLowerCase().includes(t) ||
+          u.role.includes(text) ||
+          u.region.includes(text)
+        );
+      },
+
+      toggleStatus: (id) => {
+        set((state) => ({
+          users: state.users.map(u =>
+            u.id === id
+              ? { ...u, status: u.status === 'active' ? 'disabled' : 'active' }
+              : u
+          ),
+        }));
+      },
+    }),
+    {
+      name: 'user-manage-storage',
+    }
+  )
+);

@@ -289,47 +289,91 @@ export const generatePlanKeyNodes = (count: number = 8): PlanKeyNode[] => {
 export const generateRiskPredictions = (count: number = 6): RiskPrediction[] => {
   const riskLevels: Array<'high' | 'medium' | 'low'> = ['high', 'medium', 'medium', 'low'];
   const eventTypes = ['群体性事件', '网络谣言', '食品安全', '环境污染', '安全生产', '社会民生'];
+  const titles = [
+    '春季开学季校园安全风险', '网络电信诈骗高发预警', '食品药品安全舆情风险',
+    '节假日旅游安全风险', '极端天气应急处置风险', '安全生产事故舆情风险',
+    '网络群体性事件发酵风险', '公共卫生事件传播风险'
+  ];
+  const descriptions = [
+    '近期相关话题讨论量呈上升趋势，需密切关注事态发展，提前做好应对准备',
+    '监测到多个平台出现相关讨论，存在引发群体性舆情的风险，建议启动预案',
+    '历史同期曾发生类似事件，建议提前部署监测力量，做好应急响应准备',
+    '该类事件传播速度快，影响范围广，需加强舆情监测和引导力度',
+    '涉及群众切身利益，容易引发负面情绪，建议主动发声，及时回应关切'
+  ];
+  const areas = [
+    '东部沿海地区', '中西部省会城市', '京津冀地区', '长三角地区',
+    '珠三角地区', '东北地区', '西南地区', '西北地区'
+  ];
   
-  return Array.from({ length: count }, (_, i) => ({
-    id: `risk-${i + 1}`,
-    eventType: eventTypes[i % eventTypes.length],
-    probability: Mock.Random.float(20, 85, 1, 1),
-    riskLevel: riskLevels[Mock.Random.integer(0, 3)],
-    predictedTime: Mock.Random.datetime('yyyy-MM-dd HH:mm:ss'),
-    predictedRegion: Mock.Random.shuffle(provinces).slice(0, Mock.Random.integer(1, 3)),
-    relatedHistoryEvents: [Mock.Random.ctitle(8, 15), Mock.Random.ctitle(8, 15)],
-    suggestions: [Mock.Random.csentence(10, 20), Mock.Random.csentence(10, 20), Mock.Random.csentence(10, 20)],
-  }));
+  return Array.from({ length: count }, (_, i) => {
+    const predictedTime = Mock.Random.datetime('yyyy-MM-dd HH:mm:ss');
+    return {
+      id: `risk-${i + 1}`,
+      eventType: eventTypes[i % eventTypes.length],
+      title: titles[i % titles.length],
+      description: descriptions[i % descriptions.length],
+      affectedAreas: Mock.Random.shuffle(areas).slice(0, Mock.Random.integer(2, 4)),
+      probability: Mock.Random.float(20, 85, 1, 1),
+      riskLevel: riskLevels[Mock.Random.integer(0, 3)],
+      predictedTime,
+      predictTime: predictedTime,
+      predictedRegion: Mock.Random.shuffle(provinces).slice(0, Mock.Random.integer(1, 3)),
+      relatedHistoryEvents: [Mock.Random.ctitle(8, 15), Mock.Random.ctitle(8, 15)],
+      suggestions: [Mock.Random.csentence(10, 20), Mock.Random.csentence(10, 20), Mock.Random.csentence(10, 20)],
+    };
+  });
 };
 
 export const generateSpeakerRecs = (count: number = 4): SpeakerRec[] => {
   const departments = ['宣传部', '网信办', '卫健委', '公安局', '环保局', '教育局'];
   const expertise = ['新闻发布', '危机公关', '政策解读', '专业技术', '舆情应对'];
   
-  return Array.from({ length: count }, (_, i) => ({
-    id: `speaker-${i + 1}`,
-    name: Mock.Random.cname(),
-    title: Mock.Random.pick(['新闻发言人', '副主任', '处长', '专家顾问']),
-    department: departments[i % departments.length],
-    expertise: Mock.Random.shuffle(expertise).slice(0, 3),
-    suitabilityScore: Mock.Random.float(75, 95, 1, 1),
-    reason: Mock.Random.cparagraph(1),
-  })).sort((a, b) => b.suitabilityScore - a.suitabilityScore);
+  return Array.from({ length: count }, (_, i) => {
+    const score = Mock.Random.float(75, 95, 1, 1);
+    return {
+      id: `speaker-${i + 1}`,
+      name: Mock.Random.cname(),
+      title: Mock.Random.pick(['新闻发言人', '副主任', '处长', '专家顾问']),
+      department: departments[i % departments.length],
+      expertise: Mock.Random.shuffle(expertise).slice(0, 3),
+      suitabilityScore: score,
+      matchScore: Math.round(score * 1.1),
+      reason: Mock.Random.cparagraph(1),
+    };
+  }).sort((a, b) => b.suitabilityScore - a.suitabilityScore);
 };
 
 export const generateChannelRecs = (count: number = 6): ChannelRec[] => {
   const channels = ['官方微博', '官方微信公众号', '官方抖音', '新闻发布会', '主流媒体专访', '网络问答平台'];
   const types = ['社交媒体', '社交媒体', '短视频', '线下活动', '传统媒体', '网络社区'];
+  const descriptions = [
+    '覆盖年轻用户群体，传播速度快，互动性强，适合快速发布权威信息',
+    '触达中年群体，公信力强，适合发布深度解读和政策说明',
+    '短视频形式生动直观，传播范围广，适合科普和案例展示',
+    '权威性最高，适合重大事件的官方表态和信息发布',
+    '深度报道形式，影响意见领袖，适合专业性较强的话题',
+    '精准触达提问用户，适合答疑解惑和针对性回应'
+  ];
+  const weights = [0.25, 0.30, 0.20, 0.15, 0.06, 0.04];
   
-  return Array.from({ length: count }, (_, i) => ({
-    id: `channel-${i + 1}`,
-    channel: channels[i],
-    channelType: types[i],
-    audienceCoverage: Mock.Random.integer(100000, 5000000),
-    effectivenessScore: Mock.Random.float(60, 90, 1, 1),
-    recommendedTime: Mock.Random.pick(['上午9-10点', '中午12-13点', '下午15-17点', '晚上19-21点']),
-    reason: Mock.Random.cparagraph(1),
-  }));
+  return Array.from({ length: count }, (_, i) => {
+    const coverage = Mock.Random.integer(100000, 5000000);
+    return {
+      id: `channel-${i + 1}`,
+      channel: channels[i],
+      channelType: types[i],
+      name: channels[i],
+      type: types[i],
+      weight: weights[i],
+      description: descriptions[i],
+      reach: coverage,
+      audienceCoverage: coverage,
+      effectivenessScore: Mock.Random.float(60, 90, 1, 1),
+      recommendedTime: Mock.Random.pick(['上午9-10点', '中午12-13点', '下午15-17点', '晚上19-21点']),
+      reason: Mock.Random.cparagraph(1),
+    };
+  });
 };
 
 export const generateApprovalFlows = (count: number = 6): ApprovalFlow[] => {

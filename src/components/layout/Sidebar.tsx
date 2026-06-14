@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { useUserStore } from '@/store/useUserStore';
+import { useWarningApprovalStore } from '@/store/useWarningApprovalStore';
+import { useEventStore } from '@/store/useEventStore';
 import { cn } from '@/lib/utils';
 import { UserLevel } from '@/types';
 
@@ -38,8 +40,22 @@ const levelOptions: { value: UserLevel; label: string; icon: typeof Globe }[] = 
 
 export default function Sidebar() {
   const { sidebarCollapsed, toggleSidebar } = useAppStore();
-  const { user, updateUserLevel } = useUserStore();
+  const { user, updateUserLevel, regionName } = useUserStore();
+  const { setDataLevel: setWarningLevel } = useWarningApprovalStore();
+  const { setDataLevel: setEventLevel } = useEventStore();
   const location = useLocation();
+
+  const handleLevelChange = (level: UserLevel) => {
+    // 先更新用户层级，生成随机 regionName
+    updateUserLevel(level);
+    // 获取刚刚生成的 regionName
+    setTimeout(() => {
+      const store = useUserStore.getState();
+      // 联动更新各业务 store 的数据层级
+      setWarningLevel(level, store.regionName);
+      setEventLevel(level, store.regionName);
+    }, 0);
+  };
 
   return (
     <motion.aside
@@ -77,7 +93,7 @@ export default function Sidebar() {
               return (
                 <button
                   key={option.value}
-                  onClick={() => updateUserLevel(option.value)}
+                  onClick={() => handleLevelChange(option.value)}
                   className={cn(
                     'flex-1 flex flex-col items-center gap-1 py-2 px-2 rounded-lg text-xs transition-all',
                     isActive

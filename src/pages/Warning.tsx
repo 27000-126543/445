@@ -41,8 +41,8 @@ export default function Warning() {
   const [confirmToast, setConfirmToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   useEffect(() => {
-    initData(userLevel);
-  }, [userLevel, initData]);
+    initData(userLevel, regionName);
+  }, [userLevel, regionName, initData]);
 
   // 同步选中状态
   useEffect(() => {

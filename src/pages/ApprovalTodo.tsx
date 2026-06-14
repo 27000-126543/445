@@ -43,8 +43,8 @@ export default function ApprovalTodo() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   useEffect(() => {
-    initData(userLevel);
-  }, [userLevel, initData]);
+    initData(userLevel, regionName);
+  }, [userLevel, regionName, initData]);
 
   // 同步选中
   useEffect(() => {

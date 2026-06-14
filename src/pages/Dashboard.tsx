@@ -90,7 +90,28 @@ export default function Dashboard() {
     };
     setStats(scaledStats);
 
-    const rawHeat = generateProvinceHeatData();
+    let rawHeat = generateProvinceHeatData();
+    // 真正按地区过滤热力图数据
+    if (level === 'provincial' && regionName) {
+      rawHeat = rawHeat.filter(h =>
+        h.name.includes(regionName) || regionName.includes(h.name)
+      );
+      // 如果没找到，找一个模糊匹配的
+      if (rawHeat.length === 0) {
+        rawHeat = generateProvinceHeatData().slice(0, 2).map(h => ({
+          ...h,
+          name: regionName.slice(0, 2),
+          value: scaleNumber(h.value, ratio),
+        }));
+      }
+    } else if (level === 'municipal' && regionName) {
+      // 市级视角只展示当前市
+      rawHeat = rawHeat.slice(0, 1).map(h => ({
+        ...h,
+        name: regionName,
+        value: scaleNumber(h.value, ratio),
+      }));
+    }
     const scaledHeat: ProvinceHeatData[] = rawHeat.map(h => ({
       ...h,
       value: scaleNumber(h.value, ratio),
@@ -98,19 +119,44 @@ export default function Dashboard() {
     }));
     setHeatData(scaledHeat);
 
-    const rawEvents = generateEvents(10);
+    let rawEvents = generateEvents(15);
+    // 真正按地区过滤事件
+    if (level !== 'national' && regionName) {
+      rawEvents = rawEvents.filter(e =>
+        e.region.provinces.some(p => p.includes(regionName) || regionName.includes(p))
+      );
+      // 如果没匹配到，给事件加上当前地区标签
+      if (rawEvents.length === 0) {
+        rawEvents = generateEvents(5).map((e, i) => ({
+          ...e,
+          id: `event-local-${i}`,
+          region: {
+            ...e.region,
+            provinces: [regionName],
+          },
+        }));
+      }
+    }
     const eventCount = Math.max(3, Math.round(rawEvents.length * ratio));
     const selectedEvents = rawEvents.slice(0, eventCount).map(e => ({
       ...e,
-      heat: scaleNumber(e.heat, ratio),
-      commentCount: scaleNumber(e.commentCount, ratio),
-      repostCount: scaleNumber(e.repostCount, ratio),
-      // 层级不为国家级时，给事件加上地区标签
-      region: level === 'national' ? e.region : (level === 'provincial' ? (e.region?.provinces?.[0] || regionName) : regionName) as any,
+      heat: scaleNumber(e.heatIndex, ratio),
+      heatIndex: scaleNumber(e.heatIndex, ratio),
+      commentCount: scaleNumber(e.commentCount || 0, ratio),
+      repostCount: scaleNumber(e.repostCount || 0, ratio),
     }));
     setEvents(selectedEvents as EventItem[]);
 
-    const rawOpinions = generateOpinionList(20);
+    let rawOpinions = generateOpinionList(25);
+    // 真正按地区过滤实时舆情
+    if (level !== 'national' && regionName) {
+      rawOpinions = rawOpinions.filter(o =>
+        o.region?.province?.includes(regionName) ||
+        regionName.includes(o.region?.province || '') ||
+        o.region?.city?.includes(regionName) ||
+        regionName.includes(o.region?.city || '')
+      );
+    }
     const opinionCount = Math.max(5, Math.round(rawOpinions.length * ratio));
     setOpinions(rawOpinions.slice(0, opinionCount).map(o => ({ ...o })) as OpinionItem[]);
 
@@ -118,7 +164,7 @@ export default function Dashboard() {
     const rawTrend = generateDailyEmotionData(daysCount);
     setEmotionTrend(rawTrend.map(d => ({
       ...d,
-      count: scaleNumber(d.count, ratio),
+      count: scaleNumber(d.count || 0, ratio),
       positive: scaleNumber(d.positive, ratio),
       neutral: scaleNumber(d.neutral, ratio),
       negative: scaleNumber(d.negative, ratio),

@@ -33,8 +33,8 @@ export default function ApprovalDone() {
   const [selectedApproval, setSelectedApproval] = useState<ApprovalFlow | null>(null);
 
   useEffect(() => {
-    initData(userLevel);
-  }, [userLevel, initData]);
+    initData(userLevel, regionName);
+  }, [userLevel, regionName, initData]);
 
   // 搜索 + 状态 + 类型
   const [statusFilter, setStatusFilter] = useState('全部状态');
